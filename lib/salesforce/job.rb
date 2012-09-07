@@ -2,7 +2,7 @@ require 'nokogiri'
 
 module Salesforce
   class Job
-    attr_reader :id, :options, :api, :attributes, :batches
+    attr_reader :options, :api, :job_info
 
     class << self
       def create api, opts={}, &block
@@ -11,12 +11,15 @@ module Salesforce
     end
 
     def initialize api, opts={}, &block
-      @api = api
       @options = { concurrency_mode: "Parallel", content_type: "CSV" }.merge(opts)
+
+      verify_options
+
+      @api = api
       @attributes = {}
       @batches = []
-      
-      verify_options
+      @job_info = JobInfo.new options
+
        
       if block_given?
         create
@@ -31,65 +34,55 @@ module Salesforce
       true
     end
 
-    def create
-      xml = api.request :post do |req|
-        req.body = create_job_xml
-      end
-      job_info = Hash.from_xml(xml)["jobInfo"]
-      @attributes = {}
-      job_info.each do |key, value|
-        attributes[key] = value
-      end
-      @id = attributes["id"]
-      attributes
+    def id
+      job_info.id unless job_info.nil?
     end
 
-    def add_batch data, content_type=nil
+    def create
+      xml = api.request :post do |req|
+        req.body = job_info.create_job_xml
+      end
+      job_info.update_attributes Hash.from_xml(xml)["jobInfo"]
+    end
+
+    def batch data, content_type=nil
       xml = api.request :post, "/#{id}/batch" do |req|
         req.body = data
         req.headers["Content-Type"] = content_type || "text/csv; charset=UTF-8"
       end
-      batch_info = Hash.from_xml(xml)["batchInfo"]
-      @batches << batch_info
-      batch_info 
+
+      job_info.add_batch BatchInfo.new Hash.from_xml(xml)["batchInfo"]
     end
 
     def close
       xml = api.request :post, "/#{id}" do |req|
-        req.body = close_job_xml
+        req.body = job_info.close_job_xml
       end
-
-      job_info = Hash.from_xml(xml)["jobInfo"]
-      @attributes = {}
-
-      unless job_info
-        puts xml
-        raise "job_info is nil"
-      end
-      
-      job_info.each do |key, value|
-        attributes[key] = value
-      end
-
-      job_info
+      job_info.update_attributes Hash.from_xml(xml)["jobInfo"]
     end
 
-    def status
+    def get_status
       xml = api.request :get, "/#{id}"
-      batch_info = Hash.from_xml(xml)["jobInfo"]
-      batch_info
+      job_info.update_attributes Hash.from_xml(xml)["jobInfo"]
     end
 
     def all_batches_status
       xml = api.request :get, "/#{id}/batch"
-      batch_info = Hash.from_xml(xml)["batchInfoList"]["batchInfo"]
-      batch_info.is_a?(Array) ? batch_info : [batch_info]
+      batch_info_result = Hash.from_xml(xml)["batchInfoList"]["batchInfo"]
+      
+      if batch_info_result.is_a? Array
+        batch_info_result.each { |batch_info|
+          job_info.find_batch(batch_info["id"]).update_attributes batch_info
+        }
+      else
+        job_info.find_batch(batch_info["id"]).update_attributes batch_info
+      end 
     end
 
-    def batch_status batch_id
+    def get_batch_status batch_id
       xml = api.request :get, "/#{id}/batch/#{batch_id}"
       batch_info = Hash.from_xml(xml)["batchInfo"]
-      batch_info
+      job_info.find_batch(batch_info["id"]).update_attributes batch_info
     end
 
     def batch_results batch_id=nil
@@ -106,36 +99,33 @@ module Salesforce
     end
 
     def results
-
       return false unless complete?
 
       results = {}
 
-      batches.each do |batch|
-        batch_id = batch["id"]
-        results[batch_id] = batch_results(batch_id)
+      job_info.batches.each do |batch|
+        results[batch.id] = batch_results(batch.id)
       end
 
       results
     end
 
     def state
-      status["state"]
+      get_status
+      job_info.state
     end
 
     def complete?
-      status["numberBatchesCompleted"].to_i == batches.size
+      get_status
+      job_info.number_batches_completed.to_i == job_info.batches.size
     end
 
     def batch_complete? batch_id
-      batch_status(batch_id)["state"] == "Completed"
+      batch_status(batch_id).state == "Completed"
     end
 
     protected
 
-    def xmlns
-      "http://www.force.com/2009/06/asyncapi/dataload"
-    end
 
     def create_job_xml
       Nokogiri::XML::Builder.new(:encoding => 'UTF-8') do |xml|
