@@ -17,8 +17,8 @@ module Salesforce
     end
 
     def verify_options
-      raise "Missing 'client_key' option" unless options[:client_key] || ENV[:client_key] 
-      raise "Missing 'client_secret' option" unless options[:client_secret] || ENV[:client_secret] 
+      raise "Missing 'client_key' option" unless options[:client_key] || ENV[:salesforce_key] 
+      raise "Missing 'client_secret' option" unless options[:client_secret] || ENV[:salesforce_secret] 
     end
 
     def api_url
@@ -46,11 +46,11 @@ module Salesforce
     end
 
     def client_key
-      options[:client_key] || ENV[:client_key] 
+      options[:client_key] || ENV[:salesforce_key] 
     end
 
     def client_secret
-     options[:client_secret] ||ENV[:client_secret] 
+     options[:client_secret] ||ENV[:salesforce_secret] 
     end
 
     def oauth_token
