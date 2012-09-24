@@ -14,4 +14,6 @@ Gem::Specification.new do |gem|
   gem.name          = "salesforce_api"
   gem.require_paths = ["lib"]
   gem.version       = Salesforce::VERSION
+
+  gem.add_dependency "nokogiri"
 end
