@@ -17,8 +17,8 @@ module Salesforce
     end
 
     def verify_options
-      raise "Missing 'client_key' option" unless options[:client_key]
-      raise "Missing 'client_secret' option" unless options[:client_secret]
+      raise "Missing 'client_key' option" unless ENV[:client_key] || options[:client_key]
+      raise "Missing 'client_secret' option" unless ENV[:client_secret] || options[:client_secret]
     end
 
     def api_url
@@ -38,16 +38,24 @@ module Salesforce
     end
 
     def access_token
-      options[:access_token]
+      options[:token]
     end
 
     def access_token?
-      !!options[:access_token] 
+      !!options[:token] 
+    end
+
+    def client_key
+      ENV[:client_key] || options[:client_key]
+    end
+
+    def client_secret
+      ENV[:client_secret] || options[:client_secret]
     end
 
     def oauth_token
       @oauth_token ||= begin
-        ::OAuth2::AccessToken.from_hash auth_client, options.slice(:access_token, :refresh_token)
+        ::OAuth2::AccessToken.from_hash auth_client, options.slice(:token, :refresh_token)
       end
     end
 
@@ -57,7 +65,7 @@ module Salesforce
       token = auth_client.send(strategy).get_token *args
       options[:instance_url] = token.params["instance_url"]
       options[:id_url] = token.params["id"]
-      options[:access_token] = token.token
+      options[:token] = token.token
       options[:refresh_token] = token.refresh_token
       token.client.site = options[:instance_url]
       @oauth_token = token
@@ -90,13 +98,13 @@ module Salesforce
         site: options[:authorize_url],
         token_url: options[:authorize_token_path],
         authorize_url: options[:authorize_path],
-        access_token: options[:access_token],
+        token: options[:token],
         refresh_token: options[:refresh_token]
       }
     end
 
     def auth_client
-      ::OAuth2::Client.new options[:client_key], options[:client_secret], auth_options
+      ::OAuth2::Client.new client_key, client_secret, auth_options
     end
 
     def request verb, path, opts={}, &block
