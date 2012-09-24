@@ -17,8 +17,8 @@ module Salesforce
     end
 
     def verify_options
-      raise "Missing 'client_key' option" unless client_key
-      raise "Missing 'client_secret' option" unless client_secret
+      raise "Missing 'client_key' option" if client_key.nil?
+      raise "Missing 'client_secret' option" if client_secret.nil?
     end
 
     def api_url
