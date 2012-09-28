@@ -55,7 +55,7 @@ module Salesforce
 
     def oauth_token
       @oauth_token ||= begin
-        ::OAuth2::AccessToken.from_hash auth_client, options.slice(:token, :refresh_token)
+        ::OAuth2::AccessToken.from_hash api_client, oauth_token_options(api_url)
       end
     end
 
@@ -93,18 +93,23 @@ module Salesforce
       end
     end
 
-    def auth_options
+    def oauth_token_options site=nil
       {
-        site: options[:authorize_url],
+        site: site || options[:authorize_url],
         token_url: options[:authorize_token_path],
         authorize_url: options[:authorize_path],
-        token: options[:token],
-        refresh_token: options[:refresh_token]
+        access_token: options[:token],
+        refresh_token: options[:refresh_token],
+        expires: options[:expires]
       }
     end
 
     def auth_client
-      ::OAuth2::Client.new client_key, client_secret, auth_options
+      @auth_client ||= ::OAuth2::Client.new client_key, client_secret, oauth_token_options
+    end
+
+    def api_client
+      @api_client ||= ::OAuth2::Client.new client_key, client_secret, oauth_token_options(api_url)
     end
 
     def request verb, path, opts={}, &block
